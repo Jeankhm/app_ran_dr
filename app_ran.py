@@ -1,0 +1,127 @@
+import dash
+from dash import dcc, html
+import dash_bootstrap_components as dbc
+import pandas as pd
+import plotly.express as px
+
+# Configuración de la aplicación Dash
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+
+# Cargar y procesar los datos
+def load_and_process_data():
+    df = pd.read_csv("data/report_bta_el_ensueno_3m_20_hour.csv")
+    print("Acá vemos el df inicial \n", df)
+    # Convertir la columna 'Timestamp' a tipo datetime si aún no lo está
+    df["Timestamp"] = pd.to_datetime(df["Timestamp"], format="%Y-%m-%d %H:%M:%S.%f")
+    # # Obtener solo las columnas numéricas para calcular el promedio
+    # numeric_columns = df.select_dtypes(include=["number"]).columns
+    # Agrupar por semana y tipo de celda, calculando promedios de columnas numéricas
+    # df = (
+    #     df.groupby([pd.Grouper(key="Timestamp", freq="H"), "Cell_name"])[
+    #         numeric_columns
+    #     ]
+    #     .mean()
+    #     .reset_index()
+    # )
+
+    # Mostrar el dataframe resultante
+    print("Acá vemos el df modificado por semana y promedio de columnas numéricas \n", df)
+    new_df = pd.DataFrame({
+        "Timestamp": df["Timestamp"],
+        "Week": df['Timestamp'].dt.strftime('%Y-%U'),
+        "Node": df["Cell_name"].apply(lambda x: "_".join(x.split("_")[:-2])),
+        "Cell": df["Cell_name"].apply(lambda x: "_".join(x.split("_")[-2:])),
+        "L.Traffic.ActiveUser.DL.Avg": df["L.Traffic.ActiveUser.DL.Avg"],
+        "L.ChMeas.PRB.DL.Avail": df["L.ChMeas.PRB.DL.Avail"],
+        "L.ChMeas.PRB.DL.Used.Avg": df["L.ChMeas.PRB.DL.Used.Avg"],
+        "L.Thrp.bits.DL(bit)": df["L.Thrp.bits.DL(bit)"]
+    })
+    
+    # Calcular el porcentaje de uso de PRB y agregarlo al dataframe
+    new_df["PRB_Usage_Percentage"] = (new_df["L.ChMeas.PRB.DL.Used.Avg"] / new_df["L.ChMeas.PRB.DL.Avail"]) * 100
+    print("Acá vemos el df con las columnas necesarias para los calculos \n", new_df)
+
+    # Ordenar el DataFrame por 'Cell', 'Semana' y 'L.Traffic.ActiveUser.DL.Avg' de mayor a menor
+    new_df = new_df.sort_values(by=['Cell', 'Week', 'L.ChMeas.PRB.DL.Used.Avg'], ascending=[True, True, False])
+    print("Acá ordenamos el df por celda, semana y mayor a menor PRB \n", new_df)
+
+    # Filtrar los primeros 42 datos de cada semana para cada tipo de 'Cell'
+    new_df = new_df.groupby(['Cell', 'Week']).head(42)
+    print("Acá solo cogemos los primeros 42 datos de cada semana por celda \n", new_df)
+    
+    # Calcular el promedio del porcentaje de uso de PRB por celda
+    average_prb_percentage = new_df.sort_values(by=['Cell', 'L.ChMeas.PRB.DL.Used.Avg'], ascending=[True, False])
+    print("Acá vemos el df ordenado por celdas y trafico de mayor a menor \n", new_df)
+
+    # new_df = new_df.groupby('Cell').head(42)
+    # print("Acá vemos el df limitado a 42 valores por celda \n", new_df)
+
+    new_df.to_csv("data/report_bta_el_ensueno_3m_20_week.csv", index=False)
+    return new_df, average_prb_percentage
+
+# Procesar datos
+new_df, average_prb_percentage = load_and_process_data()
+print("Acá vemos el df modificado para mostrar en la gráfica \n", new_df)
+print("Promedio del porcentaje de uso de PRB por celda: \n", average_prb_percentage)
+
+# Definir colores para sectores específicos
+cell_colors = {
+    "AWS_1": "#FFD700",  # Amarillo
+    "AWS_2": "#0000FF",  # Azul
+    "AWS_3": "#FF0000",  # Rojo
+    "B28_4": "#FFD700",  # Amarillo medio
+    "B28_5": "#0000FF",  # Azul medio
+    "B28_6": "#FF0000",  # Rojo medio
+    "B7_7": "#FFD700",  # Amarillo suave
+    "B7_8": "#0000FF",  # Azul suave
+    "B7_9": "#FF0000",  # Rojo suave
+}
+
+# Crear gráfico Dash
+def create_dash_layout():
+    fig = px.bar(
+        new_df,
+        x="Timestamp",
+        y="L.ChMeas.PRB.DL.Used.Avg",
+        color="Cell",
+        title=f"Uso de PRB por sector (Promedio semanal) Site: {", ".join(map(str, new_df["Node"].unique()))}",
+        labels={"L.ChMeas.PRB.DL.Used.Avg": "Promedio Semanal de Uso PRB"},
+        color_discrete_map=cell_colors,
+        #barmode="relative",  # Configurar para apilar las barras
+        facet_col="Cell",  # Configurar para agrupar por celda en columnas
+        hover_data={"L.ChMeas.PRB.DL.Used.Avg": True, "PRB_Usage_Percentage": True}  # Mostrar en el tooltip
+    )
+
+    return dbc.Container(
+        [
+            dbc.Row(
+                dbc.Col(
+                    html.H1("Dashboard de Monitoreo de Celdas"),
+                    className="text-center mt-3",
+                )
+            ),
+            dbc.Row(dbc.Col(dcc.Graph(id="prb-usage-graph", figure=fig))),
+            dbc.Row(
+                dbc.Col(
+                    html.Div([
+                        html.H3("Promedio del porcentaje de uso de PRB por celda"),
+                        html.Table(
+                            # Encabezados de la tabla
+                            [html.Tr([html.Th(col, style={'padding': '30px', 'text-align': 'left'}) for col in average_prb_percentage.columns])] +
+                            # Filas de la tabla
+                            [html.Tr([html.Td(average_prb_percentage.iloc[i][col]) for col in average_prb_percentage.columns]) for i in range(len(average_prb_percentage))]
+                        )
+                    ]),
+                    id="average-prb-percentage"
+                )
+            ),
+        ],
+        fluid=True,
+    )
+
+# Configurar el layout de la aplicación Dash
+app.layout = create_dash_layout()
+
+# Ejecutar la aplicación
+if __name__ == "__main__":
+    app.run_server(debug=True)
