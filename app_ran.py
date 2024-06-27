@@ -13,16 +13,6 @@ def load_and_process_data():
     print("Acá vemos el df inicial \n", df)
     # Convertir la columna 'Timestamp' a tipo datetime si aún no lo está
     df["Timestamp"] = pd.to_datetime(df["Timestamp"], format="%Y-%m-%d %H:%M:%S.%f")
-    # # Obtener solo las columnas numéricas para calcular el promedio
-    # numeric_columns = df.select_dtypes(include=["number"]).columns
-    # Agrupar por semana y tipo de celda, calculando promedios de columnas numéricas
-    # df = (
-    #     df.groupby([pd.Grouper(key="Timestamp", freq="H"), "Cell_name"])[
-    #         numeric_columns
-    #     ]
-    #     .mean()
-    #     .reset_index()
-    # )
 
     # Mostrar el dataframe resultante
     print("Acá vemos el df modificado por semana y promedio de columnas numéricas \n", df)
