@@ -10,8 +10,9 @@ import plotly.express as px
 #
 #
 #
-
-
+#
+#
+#
 # Configuración de la aplicación Dash
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
