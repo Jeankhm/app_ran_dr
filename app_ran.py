@@ -3,6 +3,14 @@ from dash import dcc, html
 import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.express as px
+#
+#
+#
+#
+#
+#
+#
+
 
 # Configuración de la aplicación Dash
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
